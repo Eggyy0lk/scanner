@@ -20,6 +20,9 @@
             --error-bg: rgba(239, 68, 68, 0.15);
             --error-border: #ef4444;
             --error-text: #f87171;
+            --info-bg: rgba(99, 102, 241, 0.15);
+            --info-border: #6366f1;
+            --info-text: #a5b4fc;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -63,6 +66,47 @@
 
         h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 8px; }
         p.subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px; line-height: 1.4; }
+
+        /* Registered code pill */
+        .registered-code {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 18px;
+            font-size: 0.82rem;
+            color: var(--info-text);
+        }
+
+        .registered-code.visible { display: flex; }
+
+        .registered-code .code-label { color: var(--text-muted); font-size: 0.75rem; }
+
+        .registered-code .code-value {
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            color: #c7d2fe;
+            font-size: 0.9rem;
+        }
+
+        .clear-code-btn {
+            margin-left: auto;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #f87171;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 4px 9px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .clear-code-btn:hover { background: rgba(239, 68, 68, 0.35); }
 
         .tab-group {
             display: flex;
@@ -175,6 +219,8 @@
             font-size: 0.9rem;
             font-weight: 600;
             display: none;
+            text-align: left;
+            line-height: 1.4;
         }
 
         .status-box.success {
@@ -191,6 +237,13 @@
             border: 1px solid var(--error-border);
         }
 
+        .status-box.info {
+            display: block;
+            background-color: var(--info-bg);
+            color: var(--info-text);
+            border: 1px solid var(--info-border);
+        }
+
         .details-footer {
             margin-top: 24px;
             padding-top: 16px;
@@ -203,6 +256,25 @@
         }
 
         .count-highlight { color: var(--text-main); font-weight: 700; }
+
+        /* Progress bar */
+        .progress-wrap {
+            margin-top: 14px;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 99px;
+            height: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 99px;
+            background: linear-gradient(90deg, #6366f1, #818cf8);
+            transition: width 0.4s ease;
+        }
+
+        .progress-bar.depleted { background: linear-gradient(90deg, #ef4444, #f87171); }
 
         .reset-btn {
             background: transparent;
@@ -220,7 +292,16 @@
 <div class="card">
     <div class="badge">Official Redemption</div>
     <h1>Promo Pass Redeemer</h1>
-    <p class="subtitle">Scan a QR code, upload an image pass, or manually enter your code/barcode number.</p>
+    <p class="subtitle">Scan a QR code, upload an image pass, or manually enter your code. The first code scanned becomes the registered pass.</p>
+
+    <!-- Shows once a code is registered -->
+    <div class="registered-code" id="registeredCodePill">
+        <div>
+            <div class="code-label">Registered Code</div>
+            <div class="code-value" id="registeredCodeValue">—</div>
+        </div>
+        <button class="clear-code-btn" onclick="clearRegisteredCode()">✕ Clear</button>
+    </div>
 
     <div class="tab-group">
         <button class="tab-btn active" onclick="switchTab('camera')">📷 Live Scan</button>
@@ -240,14 +321,14 @@
             <span class="upload-icon">🖼️</span>
             <div class="upload-text">
                 <strong>Click to select an image file</strong><br>
-                Supports QR codes & Barcode images
+                Supports QR codes &amp; Barcode images
             </div>
         </label>
         <input type="file" id="qrFileInput" accept="image/*" onchange="handleFileUpload(event)">
     </div>
 
     <div id="manualSection" class="mode-section">
-        <input type="text" id="couponInput" placeholder="ENTER CODE OR BARCODE #" maxlength="30">
+        <input type="text" id="couponInput" placeholder="ENTER CODE OR BARCODE #" maxlength="100">
         <button class="btn" onclick="applyCoupon(document.getElementById('couponInput').value)">Redeem Code</button>
     </div>
 
@@ -255,31 +336,74 @@
 
     <div class="details-footer">
         <span>Expires: <strong style="color: #cbd5e1;">Jan 28, 2027</strong></span>
-        <span>Uses Left: <span id="usesLeft" class="count-highlight">10</span> / 10</span>
+        <span>Uses Left: <span id="usesLeft" class="count-highlight">10</span> / <span id="maxUsesDisplay">10</span></span>
     </div>
 
-    <button class="reset-btn" onclick="resetUsageCount()">Reset Counter (Testing)</button>
+    <div class="progress-wrap">
+        <div class="progress-bar" id="progressBar" style="width: 100%;"></div>
+    </div>
+
+    <button class="reset-btn" onclick="resetAll()">Reset Everything (Testing)</button>
 </div>
 
 <script>
-    const TARGET_CODE = "PROMO2027";
     const MAX_USES = 10;
     const EXPIRY_DATE = new Date("2027-01-28T23:59:59");
 
-    let html5QrCode = null;
+    // State keys in localStorage
+    const KEY_TARGET   = "promoTargetCode";
+    const KEY_USES     = "promoUsageCount";
+
+    let html5QrCode   = null;
     let cameraIsRunning = false;
-    let usesCount = parseInt(localStorage.getItem("couponUsageCount") || "0", 10);
+
+    // --- Load persisted state ---
+    let targetCode = localStorage.getItem(KEY_TARGET) || null;   // null = no code registered yet
+    let usesCount  = parseInt(localStorage.getItem(KEY_USES) || "0", 10);
+
+    // Debounce flag so live scanner doesn't fire multiple times per scan
+    let lastScanTime = 0;
+    const SCAN_DEBOUNCE_MS = 2000;
 
     updateDisplay();
     startCameraScanner();
 
+    // ─── Display helpers ────────────────────────────────────────────────────────
+
     function updateDisplay() {
         const remaining = Math.max(0, MAX_USES - usesCount);
         document.getElementById("usesLeft").innerText = remaining;
+        document.getElementById("maxUsesDisplay").innerText = MAX_USES;
+
+        // Progress bar
+        const pct = (remaining / MAX_USES) * 100;
+        const bar = document.getElementById("progressBar");
+        bar.style.width = pct + "%";
+        bar.classList.toggle("depleted", remaining === 0);
+
+        // Registered code pill
+        const pill = document.getElementById("registeredCodePill");
+        const val  = document.getElementById("registeredCodeValue");
+        if (targetCode) {
+            pill.classList.add("visible");
+            val.innerText = targetCode;
+        } else {
+            pill.classList.remove("visible");
+            val.innerText = "—";
+        }
     }
 
+    function showStatus(text, type = "error") {
+        // type: "success" | "error" | "info"
+        const el = document.getElementById("statusMessage");
+        el.className = `status-box ${type}`;
+        el.innerText = text;
+    }
+
+    // ─── Tab switching ──────────────────────────────────────────────────────────
+
     function switchTab(mode) {
-        const tabs = document.querySelectorAll('.tab-btn');
+        const tabs     = document.querySelectorAll('.tab-btn');
         const sections = document.querySelectorAll('.mode-section');
 
         tabs.forEach(t => t.classList.remove('active'));
@@ -300,21 +424,21 @@
         }
     }
 
+    // ─── Camera scanner ─────────────────────────────────────────────────────────
+
     async function startCameraScanner() {
         if (cameraIsRunning) return;
         try {
-            if (!html5QrCode) {
-                html5QrCode = new Html5Qrcode("reader");
-            }
+            if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
             await html5QrCode.start(
                 { facingMode: "environment" },
                 { fps: 10, qrbox: { width: 220, height: 220 } },
                 onScanSuccess,
-                () => {} // Scan error loop callback ignored
+                () => {}
             );
             cameraIsRunning = true;
         } catch (err) {
-            showStatus("Camera access permission denied or unavailable.", false);
+            showStatus("Camera access permission denied or unavailable.", "error");
         }
     }
 
@@ -332,73 +456,113 @@
     async function toggleCamera() {
         if (cameraIsRunning) {
             await stopCameraScanner();
-            showStatus("Camera paused.", false);
+            showStatus("Camera paused.", "info");
         } else {
             await startCameraScanner();
         }
     }
 
     function onScanSuccess(decodedText) {
+        const now = Date.now();
+        if (now - lastScanTime < SCAN_DEBOUNCE_MS) return; // ignore rapid re-fires
+        lastScanTime = now;
         applyCoupon(decodedText);
     }
+
+    // ─── File upload ─────────────────────────────────────────────────────────────
 
     async function handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
-
         try {
-            const tempScanner = new Html5Qrcode("reader");
+            // Use a temporary off-screen element so we don't stomp the live scanner div
+            const tempDiv = document.createElement("div");
+            tempDiv.id = "__tempQrReader__";
+            tempDiv.style.display = "none";
+            document.body.appendChild(tempDiv);
+
+            const tempScanner = new Html5Qrcode("__tempQrReader__");
             const decodedText = await tempScanner.scanFile(file, true);
+            document.body.removeChild(tempDiv);
             applyCoupon(decodedText);
         } catch (err) {
-            showStatus("No readable QR code or barcode detected in image.", false);
+            showStatus("No readable QR code or barcode detected in the image.", "error");
         } finally {
             event.target.value = "";
         }
     }
 
+    // ─── Core redemption logic ───────────────────────────────────────────────────
+
     function applyCoupon(rawInput) {
-        const input = (rawInput || "").trim().toUpperCase();
+        const input = (rawInput || "").trim();
+        if (!input) {
+            showStatus("Please enter or scan a code.", "error");
+            return;
+        }
+
         const now = new Date();
 
-        if (!input) {
-            showStatus("Please enter or scan a code.", false);
-            return;
-        }
-
-        if (input !== TARGET_CODE) {
-            showStatus(`Invalid code "${input}". Expected code: PROMO2027`, false);
-            return;
-        }
-
+        // 1. Expiry check (applies regardless)
         if (now > EXPIRY_DATE) {
-            showStatus("This coupon expired on January 28, 2027.", false);
+            showStatus("This pass expired on January 28, 2027.", "error");
             return;
         }
 
+        // 2. If no code is registered yet, register this one
+        if (!targetCode) {
+            targetCode = input;
+            localStorage.setItem(KEY_TARGET, targetCode);
+            // Don't count this first scan as a use — just register
+            updateDisplay();
+            showStatus(`✅ Code registered: "${targetCode}"\nScan it again to start redeeming uses.`, "info");
+            return;
+        }
+
+        // 3. Code mismatch
+        if (input !== targetCode) {
+            showStatus(`Wrong code. This pass is locked to a different registered code.`, "error");
+            return;
+        }
+
+        // 4. Uses exhausted
         if (usesCount >= MAX_USES) {
-            showStatus("Coupon limit reached (10/10 uses claimed).", false);
+            showStatus("All 10 uses have been claimed for this pass.", "error");
             return;
         }
 
+        // 5. Success — consume a use
         usesCount++;
-        localStorage.setItem("couponUsageCount", usesCount);
+        localStorage.setItem(KEY_USES, usesCount);
         updateDisplay();
 
-        showStatus("🎉 Coupon successfully validated and redeemed!", true);
+        const remaining = MAX_USES - usesCount;
+        if (remaining === 0) {
+            showStatus(`🎉 Use ${usesCount}/${MAX_USES} redeemed. Pass fully used — no uses remaining.`, "success");
+        } else {
+            showStatus(`🎉 Use ${usesCount}/${MAX_USES} redeemed. ${remaining} use${remaining !== 1 ? "s" : ""} left.`, "success");
+        }
     }
 
-    function showStatus(text, isSuccess) {
-        const message = document.getElementById("statusMessage");
-        message.className = `status-box ${isSuccess ? 'success' : 'error'}`;
-        message.innerText = text;
-    }
+    // ─── Clear / reset ───────────────────────────────────────────────────────────
 
-    function resetUsageCount() {
-        usesCount = 0;
-        localStorage.setItem("couponUsageCount", "0");
+    function clearRegisteredCode() {
+        if (!confirm("Clear the registered code? This also resets the use count.")) return;
+        targetCode = null;
+        usesCount  = 0;
+        localStorage.removeItem(KEY_TARGET);
+        localStorage.removeItem(KEY_USES);
         updateDisplay();
-        showStatus("Usage counter reset to 0 for testing.", true);
+        showStatus("Registered code cleared. Scan a new QR code to register it.", "info");
+    }
+
+    function resetAll() {
+        targetCode = null;
+        usesCount  = 0;
+        localStorage.removeItem(KEY_TARGET);
+        localStorage.removeItem(KEY_USES);
+        updateDisplay();
+        showStatus("Everything reset. Scan any code to register it as the new pass.", "info");
     }
 </script>
 
