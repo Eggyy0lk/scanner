@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Promo & Barcode Scanner</title>
-    <!-- HTML5 QR & Barcode Scanner Library -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <title>Promo Pass Scanner & Redeemer</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         :root {
             --primary: #6366f1;
             --primary-hover: #4f46e5;
             --bg-gradient: radial-gradient(circle at top, #1e1b4b 0%, #0f172a 100%);
-            --card-bg: rgba(30, 41, 59, 0.85);
+            --card-bg: rgba(30, 41, 59, 0.88);
             --border-color: rgba(255, 255, 255, 0.12);
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
@@ -77,7 +76,7 @@
 
         .tab-btn {
             flex: 1;
-            padding: 10px 6px;
+            padding: 10px 4px;
             font-size: 0.8rem;
             font-weight: 600;
             border: none;
@@ -97,22 +96,26 @@
         .mode-section { display: none; margin-bottom: 20px; }
         .mode-section.active { display: block; }
 
-        .scanner-container {
+        .scanner-wrapper {
             position: relative;
             width: 100%;
             border-radius: 16px;
             overflow: hidden;
             background: #000;
             border: 1px solid var(--border-color);
-            min-height: 240px;
+            min-height: 250px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        #reader { width: 100%; border: none !important; }
+        #reader { width: 100%; }
 
         .upload-box {
+            display: block;
             border: 2px dashed var(--border-color);
             border-radius: 16px;
-            padding: 30px 20px;
+            padding: 36px 20px;
             background: rgba(15, 23, 42, 0.5);
             cursor: pointer;
             transition: border-color 0.2s, background 0.2s;
@@ -120,11 +123,11 @@
 
         .upload-box:hover {
             border-color: var(--primary);
-            background: rgba(99, 102, 241, 0.05);
+            background: rgba(99, 102, 241, 0.08);
         }
 
-        .upload-icon { font-size: 2.2rem; margin-bottom: 10px; display: block; }
-        .upload-text { font-size: 0.9rem; color: var(--text-muted); }
+        .upload-icon { font-size: 2.5rem; margin-bottom: 12px; display: block; }
+        .upload-text { font-size: 0.9rem; color: var(--text-muted); line-height: 1.4; }
         .upload-text strong { color: var(--primary); }
 
         input[type="file"] { display: none; }
@@ -150,7 +153,7 @@
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
         }
 
-        .submit-btn {
+        .btn {
             width: 100%;
             padding: 14px;
             font-size: 0.95rem;
@@ -163,11 +166,11 @@
             transition: background 0.2s;
         }
 
-        .submit-btn:hover { background-color: var(--primary-hover); }
+        .btn:hover { background-color: var(--primary-hover); }
 
         .status-box {
             margin-top: 16px;
-            padding: 12px 16px;
+            padding: 14px 16px;
             border-radius: 12px;
             font-size: 0.9rem;
             font-weight: 600;
@@ -194,11 +197,22 @@
             border-top: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
+            align-items: center;
             font-size: 0.82rem;
             color: var(--text-muted);
         }
 
         .count-highlight { color: var(--text-main); font-weight: 700; }
+
+        .reset-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            cursor: pointer;
+            text-decoration: underline;
+            margin-top: 12px;
+        }
     </style>
 </head>
 <body>
@@ -206,50 +220,45 @@
 <div class="card">
     <div class="badge">Official Redemption</div>
     <h1>Promo Pass Redeemer</h1>
-    <p class="subtitle">Scan via camera, upload an image file, or enter your code/barcode number.</p>
+    <p class="subtitle">Scan a QR code, upload an image pass, or manually enter your code/barcode number.</p>
 
-    <!-- Navigation Tabs -->
     <div class="tab-group">
-        <button class="tab-btn active" onclick="switchMode('camera')">📷 Camera</button>
-        <button class="tab-btn" onclick="switchMode('upload')">📁 Upload QR</button>
-        <button class="tab-btn" onclick="switchMode('manual')">⌨️ Barcode / Code</button>
+        <button class="tab-btn active" onclick="switchTab('camera')">📷 Live Scan</button>
+        <button class="tab-btn" onclick="switchTab('upload')">📁 Upload QR</button>
+        <button class="tab-btn" onclick="switchTab('manual')">⌨️ Manual Entry</button>
     </div>
 
-    <!-- Mode 1: Live Camera -->
-    <div id="cameraMode" class="mode-section active">
-        <div class="scanner-container">
+    <div id="cameraSection" class="mode-section active">
+        <div class="scanner-wrapper">
             <div id="reader"></div>
         </div>
+        <button class="btn" style="margin-top: 12px;" onclick="toggleCamera()">Toggle Camera</button>
     </div>
 
-    <!-- Mode 2: File Upload -->
-    <div id="uploadMode" class="mode-section">
+    <div id="uploadSection" class="mode-section">
         <label for="qrFileInput" class="upload-box">
             <span class="upload-icon">🖼️</span>
             <div class="upload-text">
-                <strong>Click to choose a file</strong> or drop an image of a QR code / Barcode here
+                <strong>Click to select an image file</strong><br>
+                Supports QR codes & Barcode images
             </div>
         </label>
         <input type="file" id="qrFileInput" accept="image/*" onchange="handleFileUpload(event)">
     </div>
 
-    <!-- Mode 3: Manual Barcode / Text Entry -->
-    <div id="manualMode" class="mode-section">
+    <div id="manualSection" class="mode-section">
         <input type="text" id="couponInput" placeholder="ENTER CODE OR BARCODE #" maxlength="30">
-        <button class="submit-btn" onclick="applyCoupon(document.getElementById('couponInput').value)">Redeem Code</button>
+        <button class="btn" onclick="applyCoupon(document.getElementById('couponInput').value)">Redeem Code</button>
     </div>
 
-    <!-- Hidden element used by library for offscreen image decoding -->
-    <div id="file-helper" style="display:none;"></div>
-
-    <!-- Feedback Message -->
     <div id="statusMessage" class="status-box"></div>
 
-    <!-- Footer Stats -->
     <div class="details-footer">
         <span>Expires: <strong style="color: #cbd5e1;">Jan 28, 2027</strong></span>
         <span>Uses Left: <span id="usesLeft" class="count-highlight">10</span> / 10</span>
     </div>
+
+    <button class="reset-btn" onclick="resetUsageCount()">Reset Counter (Testing)</button>
 </div>
 
 <script>
@@ -257,53 +266,75 @@
     const MAX_USES = 10;
     const EXPIRY_DATE = new Date("2027-01-28T23:59:59");
 
-    let html5QrcodeScanner = null;
+    let html5QrCode = null;
+    let cameraIsRunning = false;
     let usesCount = parseInt(localStorage.getItem("couponUsageCount") || "0", 10);
 
     updateDisplay();
-    initScanner();
+    startCameraScanner();
 
     function updateDisplay() {
         const remaining = Math.max(0, MAX_USES - usesCount);
         document.getElementById("usesLeft").innerText = remaining;
     }
 
-    function switchMode(mode) {
-        const buttons = document.querySelectorAll('.tab-btn');
+    function switchTab(mode) {
+        const tabs = document.querySelectorAll('.tab-btn');
         const sections = document.querySelectorAll('.mode-section');
 
-        buttons.forEach(btn => btn.classList.remove('active'));
-        sections.forEach(sec => sec.classList.remove('active'));
+        tabs.forEach(t => t.classList.remove('active'));
+        sections.forEach(s => s.classList.remove('active'));
 
         if (mode === 'camera') {
-            buttons[0].classList.add('active');
-            document.getElementById('cameraMode').classList.add('active');
-            if (!html5QrcodeScanner) initScanner();
+            tabs[0].classList.add('active');
+            document.getElementById('cameraSection').classList.add('active');
+            startCameraScanner();
         } else if (mode === 'upload') {
-            buttons[1].classList.add('active');
-            document.getElementById('uploadMode').classList.add('active');
-            stopScanner();
+            tabs[1].classList.add('active');
+            document.getElementById('uploadSection').classList.add('active');
+            stopCameraScanner();
         } else {
-            buttons[2].classList.add('active');
-            document.getElementById('manualMode').classList.add('active');
-            stopScanner();
+            tabs[2].classList.add('active');
+            document.getElementById('manualSection').classList.add('active');
+            stopCameraScanner();
         }
     }
 
-    function initScanner() {
-        html5QrcodeScanner = new Html5QrcodeScanner("reader", {
-            fps: 10,
-            qrbox: { width: 200, height: 200 },
-            aspectRatio: 1.0
-        }, false);
-
-        html5QrcodeScanner.render(onScanSuccess, () => {});
+    async function startCameraScanner() {
+        if (cameraIsRunning) return;
+        try {
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 220, height: 220 } },
+                onScanSuccess,
+                () => {} // Scan error loop callback ignored
+            );
+            cameraIsRunning = true;
+        } catch (err) {
+            showStatus("Camera access permission denied or unavailable.", false);
+        }
     }
 
-    function stopScanner() {
-        if (html5QrcodeScanner) {
-            html5QrcodeScanner.clear().catch(err => console.error(err));
-            html5QrcodeScanner = null;
+    async function stopCameraScanner() {
+        if (html5QrCode && cameraIsRunning) {
+            try {
+                await html5QrCode.stop();
+                cameraIsRunning = false;
+            } catch (err) {
+                console.error("Failed to stop scanner:", err);
+            }
+        }
+    }
+
+    async function toggleCamera() {
+        if (cameraIsRunning) {
+            await stopCameraScanner();
+            showStatus("Camera paused.", false);
+        } else {
+            await startCameraScanner();
         }
     }
 
@@ -311,20 +342,18 @@
         applyCoupon(decodedText);
     }
 
-    // Handles QR Code / Barcode Image Upload Decoding
     async function handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
 
-        const html5QrCode = new Html5Qrcode("file-helper");
-
         try {
-            const decodedText = await html5QrCode.scanFile(file, true);
+            const tempScanner = new Html5Qrcode("reader");
+            const decodedText = await tempScanner.scanFile(file, true);
             applyCoupon(decodedText);
         } catch (err) {
-            showStatus("No readable QR code or barcode found in this image.", false);
+            showStatus("No readable QR code or barcode detected in image.", false);
         } finally {
-            event.target.value = ""; // Reset input
+            event.target.value = "";
         }
     }
 
@@ -333,12 +362,12 @@
         const now = new Date();
 
         if (!input) {
-            showStatus("Please scan an image or enter a valid code.", false);
+            showStatus("Please enter or scan a code.", false);
             return;
         }
 
         if (input !== TARGET_CODE) {
-            showStatus(`Invalid Code "${input}". Please check and try again.`, false);
+            showStatus(`Invalid code "${input}". Expected code: PROMO2027`, false);
             return;
         }
 
@@ -356,13 +385,20 @@
         localStorage.setItem("couponUsageCount", usesCount);
         updateDisplay();
 
-        showStatus("🎉 Code successfully validated and redeemed!", true);
+        showStatus("🎉 Coupon successfully validated and redeemed!", true);
     }
 
     function showStatus(text, isSuccess) {
         const message = document.getElementById("statusMessage");
         message.className = `status-box ${isSuccess ? 'success' : 'error'}`;
         message.innerText = text;
+    }
+
+    function resetUsageCount() {
+        usesCount = 0;
+        localStorage.setItem("couponUsageCount", "0");
+        updateDisplay();
+        showStatus("Usage counter reset to 0 for testing.", true);
     }
 </script>
 
